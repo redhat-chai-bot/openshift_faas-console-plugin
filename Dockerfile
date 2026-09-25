@@ -13,9 +13,12 @@ COPY locales/ locales/
 COPY config/ config/
 RUN if [ -f /cachi2/cachi2.env ]; then . /cachi2/cachi2.env; fi && node ./.yarn/releases/yarn-4.18.0.cjs build
 
-FROM --platform=$BUILDPLATFORM registry.access.redhat.com/ubi9/go-toolset:1.26.7-1790174511@sha256:0a4666f7a4eb0644c97a73cba198eb268691b270d97831822689e7a2088f87be AS gobuilder
+FROM registry.access.redhat.com/ubi9/go-toolset:1.26.7-1790174511@sha256:0a4666f7a4eb0644c97a73cba198eb268691b270d97831822689e7a2088f87be AS gobuilder
 ARG TARGETOS TARGETARCH
 ENV GOOS=$TARGETOS GOARCH=$TARGETARCH
+ENV GOFLAGS=''
+ENV CGO_ENABLED=1
+ENV GOEXPERIMENT=strictfipsruntime
 WORKDIR /opt/app-root/src
 
 COPY --chown=1001:0 backend/go.mod backend/go.sum backend/
@@ -25,9 +28,9 @@ RUN if [ -f /cachi2/cachi2.env ]; then . /cachi2/cachi2.env; fi && \
 COPY --chown=1001:0 --from=nodebuilder /usr/src/app/dist backend/static
 COPY --chown=1001:0 backend/ backend/
 RUN if [ -f /cachi2/cachi2.env ]; then . /cachi2/cachi2.env; fi && \
-    mkdir -p bin && CGO_ENABLED=0 go -C backend build -ldflags="-s -w" -o ../bin/plugin-backend .
+    mkdir -p bin && go -C backend build -tags strictfipsruntime -ldflags="-s -w" -o ../bin/plugin-backend .
 
-FROM registry.access.redhat.com/ubi9-micro:latest@sha256:7a0454cbd9bd847e8f6a63b6f0254a6efbeb6e0ed71a5d824a4f6cccbe626650
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
 COPY --from=gobuilder /opt/app-root/src/bin/plugin-backend /usr/bin/plugin-backend
 COPY --from=gobuilder /etc/pki/tls/certs/ca-bundle.crt /etc/pki/tls/certs/ca-bundle.crt
 USER 1001
